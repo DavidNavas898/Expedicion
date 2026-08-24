@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expedición Slack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --purple:#6C3CE9;
+    --purple-deep:#4B22B8;
+    --yellow:#FFC93C;
+    --coral:#FF6B6B;
+    --mint:#2FD9C4;
+    --ink:#1E1533;
+    --ink-soft:#6B6280;
+    --paper:#120A24;
+    --card:#FFFFFF;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  body{
+    background:
+      radial-gradient(1000px 560px at 10% 0%, rgba(108,60,233,.5), transparent 60%),
+      radial-gradient(900px 500px at 95% 30%, rgba(47,217,196,.25), transparent 55%),
+      var(--paper);
+    min-height:100vh;
+    color:#fff;
+    font-family:'Nunito', sans-serif;
+  }
+  h1,h2,h3,.display{ font-family:'Fredoka', sans-serif; }
+  button{ font-family:inherit; cursor:pointer; border:none; }
+
+  /* ---------------- HEADER ---------------- */
+  .top{
+    text-align:center; padding:6vh 6vw 2vh;
+  }
+  .top .kicker{
+    display:inline-flex; align-items:center; gap:.5rem;
+    background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,.15);
+    padding:.45rem 1rem; border-radius:999px; font-weight:800; font-size:.78rem;
+    letter-spacing:.06em; text-transform:uppercase; color:var(--yellow); margin-bottom:1.2rem;
+  }
+  .top h1{ font-size:clamp(2rem,6vw,3.2rem); }
+  .top h1 span{ color:var(--yellow); }
+  .top p{ color:#C9C0E8; font-weight:700; max-width:48ch; margin:1rem auto 0; }
+
+  /* ---------------- MAP ---------------- */
+  .map{
+    position:relative;
+    max-width:640px;
+    margin:5vh auto 8vh;
+    padding: 1rem 0;
+  }
+  .map::before{
+    content:"";
+    position:absolute; left:50%; top:0; bottom:0; width:4px;
+    background: repeating-linear-gradient(to bottom, rgba(255,255,255,.35) 0 10px, transparent 10px 20px);
+    transform:translateX(-50%);
+    z-index:0;
+  }
+  .node-row{
+    position:relative; z-index:1;
+    display:flex; margin-bottom:3.6rem;
+  }
+  .node-row.left{ justify-content:flex-start; padding-left:6%; }
+  .node-row.right{ justify-content:flex-end; padding-right:6%; }
+  .node-wrap{ display:flex; flex-direction:column; align-items:center; gap:.6rem; }
+  .node{
+    width:84px; height:84px; border-radius:50%;
+    background:linear-gradient(145deg, var(--purple), var(--purple-deep));
+    display:flex; align-items:center; justify-content:center; font-size:2rem;
+    box-shadow: 0 8px 0 var(--purple-deep), 0 16px 26px rgba(108,60,233,.4);
+    transition: transform .15s ease;
+    position:relative;
+  }
+  .node:hover{ transform:translateY(-4px); }
+  .node.locked{ background:#2A2140; box-shadow:0 8px 0 #1c1730; cursor:not-allowed; filter:grayscale(.6); opacity:.55; }
+  .node.locked:hover{ transform:none; }
+  .node.done{ box-shadow:0 8px 0 #1B8F73, 0 16px 26px rgba(47,217,196,.35); background:linear-gradient(145deg, var(--mint), #1B8F73); }
+  .node.current::after{
+    content:""; position:absolute; inset:-8px; border-radius:50%;
+    border:3px solid var(--yellow);
+    animation: ring 1.6s ease-in-out infinite;
+  }
+  @keyframes ring{ 0%,100%{ transform:scale(1); opacity:.9;} 50%{ transform:scale(1.14); opacity:.3;} }
+  .node-label{ font-weight:800; font-size:.85rem; text-align:center; max-width:120px; color:#EFE9FF; }
+  .node-check{ position:absolute; top:-6px; right:-6px; background:var(--mint); color:var(--ink); width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.85rem; font-weight:900; }
+
+  .final-node .node{ width:100px; height:100px; font-size:2.4rem; background:linear-gradient(145deg, var(--yellow), #C99416); box-shadow:0 8px 0 #C99416, 0 16px 30px rgba(255,201,60,.4); }
+
+  /* ---------------- OVERLAY ---------------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(10,5,25,0.72);
+    display:none; align-items:flex-end; justify-content:center;
+    z-index:200; backdrop-filter: blur(4px);
+  }
+  .overlay.show{ display:flex; }
+  @media(min-width:720px){ .overlay{ align-items:center; } }
+
+  .panel{
+    background:var(--card); color:var(--ink);
+    width:100%; max-width:640px;
+    max-height:92vh; overflow-y:auto;
+    border-radius:26px 26px 0 0;
+    padding:2rem 1.8rem 1.6rem;
+    animation: slideup .3s ease;
+  }
+  @media(min-width:720px){ .panel{ border-radius:26px; } }
+  @keyframes slideup{ from{ transform:translateY(40px); opacity:0;} to{ transform:translateY(0); opacity:1;} }
+
+  .panel-head{ margin-bottom:1.2rem; }
+  .panel-tag{
+    display:inline-block; background:#F1EBFF; color:var(--purple-deep);
+    font-weight:800; font-size:.72rem; letter-spacing:.06em; text-transform:uppercase;
+    padding:.35rem .8rem; border-radius:999px; margin-bottom:.7rem;
+  }
+  .panel-head h2{ font-size:clamp(1.3rem,3.4vw,1.8rem); }
+  .story-line{
+    background:#F7F5FF; border-left:4px solid var(--purple);
+    padding:.8rem 1rem; border-radius:8px; font-weight:700; font-size:.92rem;
+    color:var(--ink); margin-bottom:1.4rem; font-style:italic;
+  }
+
+  .caption{
+    margin-top:1.4rem; background:#FFF8E4; border:1px solid #F3DFA0;
+    border-radius:12px; padding:1rem 1.1rem; font-weight:700; font-size:.9rem; color:#6B5416;
+  }
+
+  .continue-btn{
+    margin-top:1.6rem; width:100%;
+    background:var(--purple); color:#fff; font-weight:800; font-size:1rem;
+    padding:1rem; border-radius:14px;
+    box-shadow:0 6px 0 var(--purple-deep);
+    transition: transform .1s ease;
+  }
+  .continue-btn:active{ transform:translateY(4px); box-shadow:0 2px 0 var(--purple-deep); }
+
+  /* ---------------- STATION 1: CANALES ---------------- */
+  .chat-box{ border:1px solid #eee; border-radius:16px; overflow:hidden; }
+  .chan-tabs{ display:flex; gap:.4rem; padding:.8rem; background:#F7F5FF; flex-wrap:wrap; }
+  .chan-tab{
+    background:#fff; border:2px solid #eee; border-radius:999px; padding:.4rem .9rem;
+    font-weight:800; font-size:.82rem;
+  }
+  .chan-tab.active{ background:var(--purple); color:#fff; border-color:var(--purple); }
+  .chat-messages{ padding:1rem 1.1rem; min-height:170px; display:flex; flex-direction:column; gap:.8rem; }
+  .msg{ display:flex; gap:.6rem; animation:fadein .25s ease; }
+  @keyframes fadein{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  .avatar{ width:34px; height:34px; border-radius:9px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; font-size:.85rem; }
+  .msg-body b{ font-size:.86rem; }
+  .msg-body p{ font-size:.9rem; margin-top:.1rem; }
+
+  /* ---------------- STATION 2: DMs ---------------- */
+  .dm-layout{ display:grid; grid-template-columns:130px 1fr; border:1px solid #eee; border-radius:16px; overflow:hidden; min-height:220px; }
+  .dm-list{ background:#F7F5FF; padding:.8rem .5rem; }
+  .dm-contact{ width:100%; text-align:left; background:transparent; padding:.55rem .5rem; border-radius:8px; font-weight:700; font-size:.82rem; display:flex; align-items:center; gap:.4rem; }
+  .dm-contact.active{ background:var(--purple); color:#fff; }
+  .dm-thread{ padding:1rem 1.1rem; display:flex; flex-direction:column; gap:.7rem; }
+
+  /* ---------------- STATION 3: HILOS ---------------- */
+  .thread-msg{
+    background:#F7F5FF; border-radius:14px; padding:.9rem 1rem; margin-bottom:.8rem; cursor:pointer;
+  }
+  .thread-msg b{ font-size:.88rem; }
+  .thread-msg p{ font-size:.9rem; margin-top:.2rem; }
+  .thread-count{ margin-top:.5rem; font-size:.8rem; font-weight:800; color:var(--purple-deep); display:flex; align-items:center; gap:.3rem; }
+  .thread-replies{
+    max-height:0; overflow:hidden; transition:max-height .3s ease;
+    margin-left:1rem; border-left:2px solid var(--purple); padding-left:.9rem;
+  }
+  .thread-replies.open{ max-height:300px; margin-top:.7rem; }
+  .reply{ font-size:.85rem; margin-bottom:.5rem; font-weight:700; }
+  .reply span{ color:var(--ink-soft); font-weight:600; }
+
+  /* ---------------- STATION 4: REACCIONES ---------------- */
+  .react-card{ background:#F7F5FF; border-radius:16px; padding:1.2rem 1.3rem; }
+  .react-card .who{ font-weight:800; font-size:.9rem; }
+  .react-card p{ margin-top:.3rem; font-size:.95rem; }
+  .react-bar{ display:flex; gap:.6rem; margin-top:1rem; flex-wrap:wrap; }
+  .react-btn{
+    background:#fff; border:2px solid #eee; border-radius:999px; padding:.4rem .8rem;
+    font-weight:800; font-size:.95rem; display:flex; align-items:center; gap:.4rem;
+    transition:.15s;
+  }
+  .react-btn:hover{ border-color:var(--purple); transform:translateY(-2px); }
+  .react-btn .count{ font-size:.8rem; color:var(--purple-deep); }
+  .pop{ animation: popreact .3s ease; }
+  @keyframes popreact{ 0%{transform:scale(1);} 40%{transform:scale(1.3);} 100%{transform:scale(1);} }
+
+  /* ---------------- STATION 5: INTEGRACIONES ---------------- */
+  .integ-wrap{ display:flex; flex-direction:column; align-items:center; gap:1.6rem; }
+  .integ-hub{
+    width:84px; height:84px; border-radius:20px; background:var(--purple); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:1.8rem; font-weight:800;
+    box-shadow:0 6px 0 var(--purple-deep);
+  }
+  .integ-apps{ display:flex; gap:.9rem; flex-wrap:wrap; justify-content:center; }
+  .integ-app{
+    background:#fff; border:2px solid #eee; border-radius:14px; padding:.8rem 1rem;
+    display:flex; flex-direction:column; align-items:center; gap:.3rem; font-weight:800; font-size:.8rem;
+    transition:.15s;
+  }
+  .integ-app:hover{ border-color:var(--purple); transform:translateY(-3px); }
+  .integ-app .e{ font-size:1.4rem; }
+  .integ-app.connected{ border-color:var(--mint); background:#EAFBF6; }
+  .integ-feed{ width:100%; background:#F7F5FF; border-radius:14px; padding:1rem; min-height:80px; }
+  .integ-feed .empty{ color:var(--ink-soft); font-weight:700; font-size:.85rem; text-align:center; }
+  .integ-note{ display:flex; gap:.6rem; align-items:center; font-weight:700; font-size:.86rem; margin-bottom:.6rem; animation:fadein .3s ease; }
+  .integ-note .e{ font-size:1.2rem; }
+
+  /* ---------------- FINAL PANEL ---------------- */
+  .final-recap{ display:flex; flex-direction:column; gap:.7rem; margin:1.2rem 0 1.6rem; }
+  .final-recap div{ background:#F7F5FF; border-radius:12px; padding:.8rem 1rem; font-weight:700; font-size:.9rem; display:flex; gap:.6rem; }
+
+  .confetti-piece{ position:fixed; top:-10px; width:10px; height:16px; z-index:999; pointer-events:none; animation: fall linear forwards; }
+  @keyframes fall{ to{ transform: translateY(110vh) rotate(540deg); opacity:.9; } }
+
+  @media (prefers-reduced-motion: reduce){
+    .node.current::after{ animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="kicker">🗺️ Mapa interactivo</div>
+  <h1>Expedición <span>Slack</span></h1>
+  <p>Recorre las 5 estaciones. En cada una puedes jugar libremente con el ejemplo — no hay respuestas correctas ni incorrectas, solo explorar.</p>
+</div>
+
+<div class="map" id="map"></div>
+
+<div class="overlay" id="overlay">
+  <div class="panel" id="panel"></div>
+</div>
+
+<script>
+/* ================= STATIONS DATA ================= */
+const stations = [
+  {id:1, emoji:'🚪', label:'Canales', side:'left'},
+  {id:2, emoji:'✉️', label:'Mensajes directos', side:'right'},
+  {id:3, emoji:'🧵', label:'Hilos', side:'left'},
+  {id:4, emoji:'⚡', label:'Reacciones', side:'right'},
+  {id:5, emoji:'🔌', label:'Integraciones', side:'left'},
+];
+
+let unlocked = 1; // stations up to this number are clickable
+let visited = new Set();
+
+/* ================= BUILD MAP ================= */
+const mapEl = document.getElementById('map');
+
+function buildMap(){
+  mapEl.innerHTML = '';
+  stations.forEach(st=>{
+    const row = document.createElement('div');
+    row.className = 'node-row ' + st.side;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'node-wrap';
+
+    const node = document.createElement('div');
+    let cls = 'node';
+    if(st.id > unlocked) cls += ' locked';
+    if(visited.has(st.id)) cls += ' done';
+    if(st.id === unlocked && !visited.has(st.id)) cls += ' current';
+    node.className = cls;
+    node.textContent = st.emoji;
+    if(visited.has(st.id)){
+      const chk = document.createElement('div');
+      chk.className = 'node-check';
+      chk.textContent = '✓';
+      node.appendChild(chk);
+    }
+    node.onclick = ()=>{ if(st.id <= unlocked) openStation(st.id); };
+
+    const label = document.createElement('div');
+    label.className = 'node-label';
+    label.textContent = st.label;
+
+    wrap.appendChild(node);
+    wrap.appendChild(label);
+    row.appendChild(wrap);
+    mapEl.appendChild(row);
+  });
+
+  // final trophy node
+  const finalRow = document.createElement('div');
+  finalRow.className = 'node-row right final-node';
+  const fWrap = document.createElement('div');
+  fWrap.className = 'node-wrap';
+  const fNode = document.createElement('div');
+  fNode.className = 'node' + (unlocked > stations.length ? '' : ' locked');
+  fNode.textContent = '🏆';
+  fNode.onclick = ()=>{ if(unlocked > stations.length) openFinal(); };
+  const fLabel = document.createElement('div');
+  fLabel.className = 'node-label';
+  fLabel.textContent = 'Resumen final';
+  fWrap.appendChild(fNode); fWrap.appendChild(fLabel);
+  finalRow.appendChild(fWrap);
+  mapEl.appendChild(finalRow);
+}
+
+/* ================= OVERLAY HELPERS ================= */
+const overlay = document.getElementById('overlay');
+const panel = document.getElementById('panel');
+
+function openOverlay(html){
+  panel.innerHTML = html;
+  overlay.classList.add('show');
+}
+function closeOverlay(){
+  overlay.classList.remove('show');
+}
+
+function markVisitedAndContinue(stationId){
+  visited.add(stationId);
+  if(stationId === unlocked) unlocked = stationId + 1;
+  closeOverlay();
+  buildMap();
+}
+
+/* ================= STATION 1: CANALES ================= */
+const channelData = {
+  marketing: [
+    {who:'Ana', color:'#FF6B6B', text:'¿Ya tenemos el diseño del banner nuevo?'},
+    {who:'Luis', color:'#2FD9C4', text:'Sí, lo subo al canal en 5 minutos.'},
+  ],
+  soporte: [
+    {who:'Marta', color:'#FFC93C', text:'Un usuario reporta que no puede iniciar sesión.'},
+    {who:'Iván', color:'#6C3CE9', text:'Lo reviso ahora mismo.'},
+  ],
+  cafe: [
+    {who:'Pedro', color:'#2FD9C4', text:'¿Alguien quiere café? Voy a preparar ☕'},
+    {who:'Sofía', color:'#FF6B6B', text:'¡Yo sí, gracias!'},
+  ]
+};
+function initials(n){ return n.split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase(); }
+
+function openStation1(){
+  openOverlay(`
+    <div class="panel-head">
+      <span class="panel-tag">Estación 1</span>
+      <h2>La sala de los canales</h2>
+    </div>
+    <div class="story-line">Entras a un pasillo con varias puertas. Cada una tiene un letrero con un tema distinto.</div>
+    <div class="chat-box">
+      <div class="chan-tabs" id="chanTabs"></div>
+      <div class="chat-messages" id="chanMessages"></div>
+    </div>
+    <div class="caption">💡 Cada canal agrupa la conversación por tema o proyecto. Así, cada persona entra solo a lo que le importa. Cambia de pestaña y mira cómo cambia toda la conversación.</div>
+    <button class="continue-btn" onclick="markVisitedAndContinue(1)">Continuar viaje →</button>
+  `);
+  const tabs = document.getElementById('chanTabs');
+  const names = {marketing:'# marketing', soporte:'# soporte', cafe:'# cafecito'};
+  let current = 'marketing';
+  function render(){
+    tabs.innerHTML = '';
+    Object.keys(names).forEach(k=>{
+      const b = document.createElement('button');
+      b.className = 'chan-tab' + (k===current?' active':'');
+      b.textContent = names[k];
+      b.onclick = ()=>{ current = k; render(); };
+      tabs.appendChild(b);
+    });
+    const msgWrap = document.getElementById('chanMessages');
+    msgWrap.innerHTML = '';
+    channelData[current].forEach(m=>{
+      const row = document.createElement('div');
+      row.className = 'msg';
+      row.innerHTML = `<div class="avatar" style="background:${m.color}">${initials(m.who)}</div>
+        <div class="msg-body"><b>${m.who}</b><p>${m.text}</p></div>`;
+      msgWrap.appendChild(row);
+    });
+  }
+  render();
+}
+
+/* ================= STATION 2: DMs ================= */
+const dmData = {
+  ana: [{from:'Ana', text:'¿Nos vemos a almorzar?'},{from:'Tú', text:'Claro, ¿a la 1pm?'}],
+  jefe: [{from:'Jefe', text:'¿Puedes revisar el reporte antes de las 3pm?'},{from:'Tú', text:'Sí, lo reviso ahora.'}],
+  luis: [{from:'Luis', text:'Te comparto el archivo en un momento.'}],
+};
+function openStation2(){
+  openOverlay(`
+    <div class="panel-head">
+      <span class="panel-tag">Estación 2</span>
+      <h2>El buzón privado</h2>
+    </div>
+    <div class="story-line">Al final del pasillo hay pequeños casilleros con nombres. Son conversaciones solo entre dos personas.</div>
+    <div class="dm-layout">
+      <div class="dm-list" id="dmList"></div>
+      <div class="dm-thread" id="dmThread"></div>
+    </div>
+    <div class="caption">💡 Los mensajes directos (DM) son privados, uno a uno — como pasar una nota, pero sin que nadie más la lea. Haz clic en cada contacto.</div>
+    <button class="continue-btn" onclick="markVisitedAndContinue(2)">Continuar viaje →</button>
+  `);
+  const names = {ana:'👩 Ana', jefe:'🧑‍💼 Jefe', luis:'🧑 Luis'};
+  let current = 'ana';
+  const list = document.getElementById('dmList');
+  function render(){
+    list.innerHTML = '';
+    Object.keys(names).forEach(k=>{
+      const b = document.createElement('button');
+      b.className = 'dm-contact' + (k===current?' active':'');
+      b.textContent = names[k];
+      b.onclick = ()=>{ current = k; render(); };
+      list.appendChild(b);
+    });
+    const thread = document.getElementById('dmThread');
+    thread.innerHTML = '';
+    dmData[current].forEach(m=>{
+      const p = document.createElement('div');
+      p.innerHTML = `<b style="font-size:.85rem;">${m.from}:</b> <span style="font-size:.9rem;">${m.text}</span>`;
+      thread.appendChild(p);
+    });
+  }
+  render();
+}
+
+/* ================= STATION 3: HILOS ================= */
+const threadData = [
+  {who:'Camila', text:'¿Alguien probó el nuevo botón de pago?', replies:[
+    {from:'Diego', text:'Sí, yo lo probé esta mañana.'},
+    {from:'Camila', text:'¿Y funcionó bien?'},
+    {from:'Diego', text:'Perfecto, ya se puede publicar.'},
+  ]},
+  {who:'Sara', text:'Reunión de equipo movida a las 4pm', replies:[
+    {from:'Iván', text:'Anotado, gracias por avisar.'},
+  ]},
+];
+function openStation3(){
+  const listHtml = threadData.map((t,i)=>`
+    <div class="thread-msg" onclick="toggleThread(${i})">
+      <b>${t.who}:</b>
+      <p>${t.text}</p>
+      <div class="thread-count">💬 ${t.replies.length} respuestas — clic para ver el hilo</div>
+      <div class="thread-replies" id="thread-${i}">
+        ${t.replies.map(r=>`<div class="reply"><span>${r.from}:</span> ${r.text}</div>`).join('')}
+      </div>
+    </div>
+  `).join('');
+  openOverlay(`
+    <div class="panel-head">
+      <span class="panel-tag">Estación 3</span>
+      <h2>El tablón de hilos</h2>
+    </div>
+    <div class="story-line">Cada mensaje en la pared tiene un hilo colgando. Tira de él para ver las respuestas escondidas.</div>
+    ${listHtml}
+    <div class="caption">💡 Un hilo ancla las respuestas a un mensaje específico, en vez de llenar el canal principal con contestaciones sueltas. Haz clic en un mensaje para abrir su hilo.</div>
+    <button class="continue-btn" onclick="markVisitedAndContinue(3)">Continuar viaje →</button>
+  `);
+}
+function toggleThread(i){
+  const el = document.getElementById('thread-'+i);
+  el.classList.toggle('open');
+}
+
+/* ================= STATION 4: REACCIONES ================= */
+const reactState = {'👍':3, '🎉':1, '😂':0, '❤️':2};
+function openStation4(){
+  openOverlay(`
+    <div class="panel-head">
+      <span class="panel-tag">Estación 4</span>
+      <h2>El muro de reacciones</h2>
+    </div>
+    <div class="story-line">Frente a ti hay un mensaje pegado en la pared, y debajo, botones de emoji gastados de tanto uso.</div>
+    <div class="react-card">
+      <div class="who">Luis</div>
+      <p>Terminamos el proyecto antes de tiempo 🎉</p>
+      <div class="react-bar" id="reactBar"></div>
+    </div>
+    <div class="caption">💡 Reaccionar con un emoji reemplaza mensajes cortos como "recibido" o "buena idea". Es más rápido y no llena el canal de texto. Haz clic en los emojis, súbelos todo lo que quieras.</div>
+    <button class="continue-btn" onclick="markVisitedAndContinue(4)">Continuar viaje →</button>
+  `);
+  renderReacts();
+}
+function renderReacts(){
+  const bar = document.getElementById('reactBar');
+  bar.innerHTML = '';
+  Object.keys(reactState).forEach(emo=>{
+    const b = document.createElement('button');
+    b.className = 'react-btn';
+    b.innerHTML = `${emo} <span class="count">${reactState[emo]}</span>`;
+    b.onclick = ()=>{
+      reactState[emo]++;
+      renderReacts();
+      const btns = document.querySelectorAll('#reactBar .react-btn');
+    };
+    bar.appendChild(b);
+  });
+  // pop animation on last rendered set
+  bar.querySelectorAll('.react-btn').forEach(b=> b.classList.add('pop'));
+}
+
+/* ================= STATION 5: INTEGRACIONES ================= */
+const integApps = [
+  {id:'drive', e:'📁', label:'Drive', note:'Nuevo archivo compartido en Drive'},
+  {id:'trello', e:'📋', label:'Trello', note:'Se movió una tarjeta a "Terminado" en Trello'},
+  {id:'cal', e:'📅', label:'Calendario', note:'Reunión agendada para mañana a las 10am'},
+  {id:'zoom', e:'🎥', label:'Zoom', note:'La videollamada del equipo está por comenzar'},
+];
+function openStation5(){
+  openOverlay(`
+    <div class="panel-head">
+      <span class="panel-tag">Estación 5</span>
+      <h2>La sala de máquinas</h2>
+    </div>
+    <div class="story-line">Aquí está el centro de control: un núcleo conectado a otras herramientas de la oficina.</div>
+    <div class="integ-wrap">
+      <div class="integ-hub">💬</div>
+      <div class="integ-apps" id="integApps"></div>
+      <div class="integ-feed" id="integFeed"><div class="empty">Haz clic en una app para conectarla…</div></div>
+    </div>
+    <div class="caption">💡 Slack se conecta con herramientas como Drive, Trello o Zoom. Sus notificaciones llegan directo al canal correspondiente, sin cambiar de aplicación.</div>
+    <button class="continue-btn" onclick="markVisitedAndContinue(5)">Ver resumen final →</button>
+  `);
+  const wrap = document.getElementById('integApps');
+  integApps.forEach(app=>{
+    const b = document.createElement('button');
+    b.className = 'integ-app';
+    b.id = 'app-'+app.id;
+    b.innerHTML = `<span class="e">${app.e}</span>${app.label}`;
+    b.onclick = ()=> connectApp(app, b);
+    wrap.appendChild(b);
+  });
+}
+function connectApp(app, btnEl){
+  btnEl.classList.add('connected');
+  const feed = document.getElementById('integFeed');
+  const empty = feed.querySelector('.empty');
+  if(empty) empty.remove();
+  const note = document.createElement('div');
+  note.className = 'integ-note';
+  note.innerHTML = `<span class="e">${app.e}</span> ${app.note}`;
+  feed.prepend(note);
+}
+
+/* ================= DISPATCH ================= */
+function openStation(id){
+  if(id===1) openStation1();
+  if(id===2) openStation2();
+  if(id===3) openStation3();
+  if(id===4) openStation4();
+  if(id===5) openStation5();
+}
+
+function openFinal(){
+  openOverlay(`
+    <div class="panel-head" style="text-align:center;">
+      <div style="font-size:3rem;">🏆</div>
+      <h2>¡Completaste la expedición!</h2>
+    </div>
+    <div class="final-recap">
+      <div>🚪 <span><b>Canales:</b> agrupan la conversación por tema, para que cada quien vea solo lo que le importa.</span></div>
+      <div>✉️ <span><b>Mensajes directos:</b> conversaciones privadas, uno a uno.</span></div>
+      <div>🧵 <span><b>Hilos:</b> anclan las respuestas a un mensaje, sin desordenar el canal.</span></div>
+      <div>⚡ <span><b>Reacciones:</b> respuestas rápidas con emoji, sin escribir.</span></div>
+      <div>🔌 <span><b>Integraciones:</b> conectan Slack con otras herramientas del equipo.</span></div>
+    </div>
+    <div class="story-line">En resumen: Slack reemplaza el correo interno por un espacio organizado, rápido y fácil de buscar.</div>
+    <button class="continue-btn" onclick="closeOverlay()">Cerrar</button>
+  `);
+  launchConfetti();
+}
+
+/* ================= CONFETTI ================= */
+function launchConfetti(){
+  const colors = ['#6C3CE9','#FFC93C','#FF6B6B','#2FD9C4'];
+  for(let i=0;i<60;i++){
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random()*100+'vw';
+    piece.style.background = colors[Math.floor(Math.random()*colors.length)];
+    piece.style.animationDuration = (2.5 + Math.random()*2)+'s';
+    document.body.appendChild(piece);
+    setTimeout(()=> piece.remove(), 5200);
+  }
+}
+
+overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeOverlay(); });
+
+buildMap();
+</script>
+</body>
+</html>
